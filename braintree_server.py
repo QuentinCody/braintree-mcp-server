@@ -166,6 +166,101 @@ async def braintree_get_graphql_id_from_legacy_id(legacy_id: str, legacy_id_type
 
 # --- End of NEW TOOL ---
 
+@mcp.tool()
+async def braintree_get_transactions_by_date(date: str) -> str:
+    """
+    Retrieves all transactions from Braintree for a specific date.
+    
+    Args:
+        date: The date to retrieve transactions for, in YYYY-MM-DD format.
+    
+    Returns:
+        JSON string containing the transactions for the specified date.
+    """
+    print(f"Executing braintree_get_transactions_by_date for date: {date}")
+    
+    # Create the start and end datetime for the specified date (midnight to midnight)
+    start_datetime = f"{date}T00:00:00Z"
+    end_datetime = f"{date}T23:59:59Z"
+    
+    # The GraphQL query for searching transactions by date
+    query = """
+        query TransactionsByDate($input: TransactionSearchInput!, $first: Int!, $after: String) {
+            search {
+                transactions(input: $input, first: $first, after: $after) {
+                    pageInfo {
+                        hasNextPage
+                        endCursor
+                    }
+                    edges {
+                        node {
+                            id
+                            legacyId
+                            amount {
+                                value
+                                currencyCode
+                            }
+                            status
+                            createdAt
+                            paymentMethodSnapshot {
+                                __typename
+                                ... on CreditCardDetails {
+                                    bin
+                                    last4
+                                    expirationMonth
+                                    expirationYear
+                                }
+                            }
+                            customer {
+                                id
+                                firstName
+                                lastName
+                                email
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    """
+    
+    # Variables for the GraphQL query - updated to use lessThanOrEqualTo/greaterThanOrEqualTo
+    variables = {
+        "input": {
+            "createdAt": {
+                "lessThanOrEqualTo": end_datetime,
+                "greaterThanOrEqualTo": start_datetime
+            }
+        },
+        "first": 50  # Fetch exactly 50 transactions
+    }
+    
+    # Collect transactions (single page only)
+    all_transactions = []
+    
+    print("Fetching transactions...")
+    result = await make_braintree_request(query, variables)
+    
+    # Check for errors
+    if "errors" in result:
+        error_message = ", ".join([err.get("message", "Unknown error") for err in result["errors"]])
+        return f"Error retrieving transactions: {error_message}"
+    
+    # Extract transactions data
+    try:
+        transactions_data = result["data"]["search"]["transactions"]
+        all_transactions = [edge["node"] for edge in transactions_data["edges"]]
+        print(f"Retrieved {len(all_transactions)} transactions")
+    except (KeyError, TypeError) as e:
+        print(f"Error parsing transaction data: {e}")
+        return f"Error parsing transaction data: {e}. Response: {json.dumps(result)}"
+    
+    # Format and return the transactions
+    return json.dumps({
+        "date": date,
+        "transaction_count": len(all_transactions),
+        "transactions": all_transactions
+    })
 
 if __name__ == "__main__":
      print("Attempting to run Braintree MCP server via stdio...")
