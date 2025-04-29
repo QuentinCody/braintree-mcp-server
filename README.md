@@ -165,10 +165,6 @@ With variables:
 - Verify your network connection can reach Braintree's API endpoints
 - Check for any rate limiting or permission issues with your Braintree account
 
-## License
-
-This project is intended for demonstration purposes. Use in production at your own risk.
-
 ## Disclaimer
 
 This is an unofficial integration and is not endorsed by or affiliated with PayPal or Braintree.
