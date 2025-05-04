@@ -1,0 +1,9 @@
+# Core dependencies for Braintree MCP Server
+fastmcp>=2.0.0  # FastMCP 2.0 or newer for modern MCP SDK features
+python-dotenv>=1.0.0  # For loading .env files
+httpx>=0.24.0  # Async HTTP client
+orjson>=3.9.0  # Optional, but faster JSON handling
+
+# Additional dependencies for SSE transport
+starlette>=0.30.0  # Web framework for SSE support
+uvicorn>=0.23.0  # ASGI server to run the SSE transport 

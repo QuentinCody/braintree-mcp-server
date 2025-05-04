@@ -1,15 +1,25 @@
+"""
+Braintree MCP Server with SSE Transport
+
+This version of the Braintree MCP server uses Server-Sent Events (SSE) transport
+for persistent, multi-client connections. This is meant for manual deployment as 
+a standalone web server, not for use with Claude Desktop.
+
+For Claude Desktop integration, use braintree_server.py which uses STDIO transport.
+"""
+
 import os
-import httpx # Add this import
-import base64 # Add this import
-import asyncio # Add this import
-import json # Add this import
+import httpx 
+import base64 
+import asyncio 
+import json 
 try:
     import orjson as json_lib  # Faster and more robust
 except ImportError:
     import json as json_lib
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
-from typing import Any, Dict, Union, List, Optional # Add these imports
+from typing import Any, Dict, Union, List, Optional 
 
 load_dotenv()
 
@@ -32,6 +42,11 @@ BRAINTREE_API_URL = (
 
 # Braintree API Version (Check Braintree docs for the latest recommended version)
 BRAINTREE_API_VERSION = "2025-04-01" # Example, update as needed
+
+# Default host and port for the SSE server
+DEFAULT_HOST = "127.0.0.1"  # Using localhost for security (prevent DNS rebinding attacks)
+DEFAULT_PORT = 8001  # Changed from 8000 to avoid conflicts
+DEFAULT_LOG_LEVEL = "INFO"
 
 mcp = FastMCP("braintree", version="0.1.0")
 print("Braintree MCP Server initialized.")
@@ -317,7 +332,7 @@ async def make_braintree_request(query: str, variables: Dict[str, Any] = None, m
         return {"errors": [{"message": "Failed after retries with unknown error"}]}
 
 @mcp.tool()
-async def braintree_ping(random_string: str = "") -> str:
+async def braintree_sse_ping(random_string: str = "") -> str:
     """
     Performs a simple ping query to the Braintree GraphQL API to check connectivity and authentication.
     Returns 'pong' on success, or an error message.
@@ -345,7 +360,7 @@ async def braintree_ping(random_string: str = "") -> str:
         return f"Error connecting to Braintree: {sanitize_for_json(e)}"
 
 @mcp.tool()
-async def braintree_execute_graphql(query: str, variables: Dict[str, Any] = None) -> str:
+async def braintree_execute_graphql_sse(query: str, variables: Dict[str, Any] = None) -> str:
     """
     Executes an arbitrary GraphQL query or mutation against the Braintree API.
     This powerful tool provides unlimited flexibility for any Braintree GraphQL operation
@@ -508,14 +523,35 @@ async def braintree_execute_graphql(query: str, variables: Dict[str, Any] = None
         return safe_json_dumps(error_obj)
 
 if __name__ == "__main__":
-     print("Attempting to run Braintree MCP server via stdio...")
-     # Basic check before running
-     if not all([BRAINTREE_MERCHANT_ID, BRAINTREE_PUBLIC_KEY, BRAINTREE_PRIVATE_KEY]):
-          print("FATAL: Cannot start server, Braintree credentials missing.")
-     else:
-        print(f"Configured for Braintree Environment: {BRAINTREE_ENVIRONMENT}")
+    import sys
+    
+    # Check if being run by Claude Desktop
+    is_claude_desktop = True
+    
+    # Print diagnostic information to stderr so Claude Desktop can capture it
+    print("Braintree SSE MCP Server initializing...", file=sys.stderr)
+    
+    # Basic check before running
+    if not all([BRAINTREE_MERCHANT_ID, BRAINTREE_PUBLIC_KEY, BRAINTREE_PRIVATE_KEY]):
+        print("FATAL: Cannot start server, Braintree credentials missing.", file=sys.stderr)
+    else:
+        print(f"Configured for Braintree Environment: {BRAINTREE_ENVIRONMENT}", file=sys.stderr)
+        print(f"Starting SSE server on {DEFAULT_HOST}:{DEFAULT_PORT}", file=sys.stderr)
         try:
-            mcp.run(transport='stdio')
-            print("Server stopped.")
+            # Use a different port to avoid conflicts
+            os.environ["FASTMCP_SSE_HOST"] = DEFAULT_HOST
+            os.environ["FASTMCP_SSE_PORT"] = str(DEFAULT_PORT)
+            os.environ["FASTMCP_LOG_LEVEL"] = DEFAULT_LOG_LEVEL
+            
+            if is_claude_desktop:
+                print("Detected Claude Desktop environment, using appropriate transport", file=sys.stderr)
+                # When running in Claude Desktop, let it decide the transport type
+                mcp.run()
+            else:
+                # For manual standalone usage with SSE
+                print("Running with SSE transport on port {DEFAULT_PORT}", file=sys.stderr)
+                mcp.run(transport='sse')
+                
+            print("Server stopped.", file=sys.stderr)
         except Exception as e:
-            print(f"Error running server: {e}")
+            print(f"Error running server: {e}", file=sys.stderr) 
