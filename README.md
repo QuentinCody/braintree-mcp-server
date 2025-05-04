@@ -34,25 +34,27 @@ Use an MCP client that supports SSE transport and connect to `http://127.0.0.1:8
 
 ## Overview
 
-This MCP server provides a seamless interface to the Braintree API through GraphQL, enabling:
-
-- Customer management
-- Payment method operations
-- Transaction processing
-- Subscription handling
-- Dispute and refund management
+This server implements the Model Context Protocol (MCP) specification to provide AI assistant models with direct, structured access to Braintree's payment processing capabilities via GraphQL API. It enables AI systems to perform payment operations like fetching transactions, creating payments, and managing customer data through MCP tools.
 
 ## Installation
 
+1. Clone this repository
 ```bash
-# Clone the repository
 git clone https://github.com/yourusername/braintree-mcp-server.git
 cd braintree-mcp-server
+```
 
-# Install dependencies
-pip install -r requirements.txt
+2. Set up a Python 3.13+ environment
+```bash
+# If using pyenv
+pyenv install 3.13.0
+pyenv local 3.13.0
 
-# Optional: Install as editable package
+# Or using another method to ensure Python 3.13+
+```
+
+3. Install dependencies
+```bash
 pip install -e .
 ```
 
@@ -71,42 +73,134 @@ You can obtain these credentials from your Braintree Control Panel.
 
 ## Usage
 
-The server exposes two primary tools:
+### Running the server
 
-1. `braintree_ping`: Tests connectivity to the Braintree API
-2. `braintree_execute_graphql`: Executes arbitrary GraphQL queries against the Braintree API
+#### Default STDIO Transport
+```bash
+python braintree_server.py
+```
 
-### Example GraphQL Queries
+The server runs using stdio transport by default, which is suitable for integration with AI assistant systems that support MCP.
 
-See the docstring in `braintree_execute_graphql` for comprehensive examples of common operations with the Braintree API.
+#### Server-Sent Events (SSE) Transport
+```bash
+python braintree_sse_server.py
+```
 
-## Available Tools
+The SSE server provides a web-based transport layer that allows multiple persistent client connections. This is useful for standalone deployments where multiple clients need to access the Braintree functionality.
 
-The server provides these tools:
-
-### Standard STDIO server (`braintree_server.py`):
-- `braintree_ping` - Test connectivity to the Braintree API
-- `braintree_execute_graphql` - Execute arbitrary GraphQL queries against the Braintree API
-
-### SSE server (`braintree_sse_server.py`):
-- `braintree_sse_ping` - Test connectivity to the Braintree API over SSE
-- `braintree_execute_graphql_sse` - Execute arbitrary GraphQL queries over SSE
-
-## Dependencies
+Default configuration:
+- Host: 127.0.0.1 (localhost)
+- Port: 8001
+- Environment: Defined in your .env file
 
 See `requirements.txt` for the required dependencies.
 
-## Requirements
+### Available MCP Tools
 
-- Python 3.13+
-- Braintree merchant account credentials
+#### braintree_ping
+
+Simple connectivity test to check if your Braintree credentials are working.
+
+```python
+response = await braintree_ping()
+# Returns "pong" if successful
+```
+
+#### braintree_execute_graphql
+
+Execute arbitrary GraphQL queries against the Braintree API.
+
+```python
+query = """
+query GetTransactionDetails($id: ID!) {
+  node(id: $id) {
+    ... on Transaction {
+      id
+      status
+      amount {
+        value
+        currencyCode
+      }
+      createdAt
+    }
+  }
+}
+"""
+
+variables = {"id": "transaction_id_here"}
+
+response = await braintree_execute_graphql(query, variables)
+# Returns JSON response from Braintree
+```
+
+## Common GraphQL Operations
+
+### Fetch Customer
+
+```graphql
+query GetCustomer($id: ID!) {
+  node(id: $id) {
+    ... on Customer {
+      id
+      firstName
+      lastName
+      email
+      paymentMethods {
+        edges {
+          node {
+            id
+            details {
+              ... on CreditCardDetails {
+                last4
+                expirationMonth
+                expirationYear
+                cardType
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Create Transaction
+
+```graphql
+mutation CreateTransaction($input: ChargePaymentMethodInput!) {
+  chargePaymentMethod(input: $input) {
+    transaction {
+      id
+      status
+      amount {
+        value
+        currencyCode
+      }
+    }
+  }
+}
+```
+
+With variables:
+```json
+{
+  "input": {
+    "paymentMethodId": "payment_method_id_here",
+    "transaction": {
+      "amount": "10.00",
+      "orderId": "order123",
+      "options": {
+        "submitForSettlement": true
+      }
+    }
+  }
+}
+```
 
 ## Troubleshooting
 
 - Ensure your Braintree credentials are correct in the `.env` file
 - Verify your network connection can reach Braintree's API endpoints
 - Check for any rate limiting or permission issues with your Braintree account
-
-## Disclaimer
-
-This is an unofficial integration and is not endorsed by or affiliated with PayPal or Braintree.
